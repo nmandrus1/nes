@@ -1,6 +1,7 @@
 use log::{debug, error, info, trace, warn};
 
 #[repr(u8)]
+
 enum StatusFlag {
     Carry = 0,
     Zero = 1,
@@ -79,16 +80,35 @@ impl CPU {
         (byte1 << 8) | byte2
     }
 
+    /// Reads the bit of the passed flag
     fn flag_status(&self, flag: StatusFlag) -> bool {
         (self.status >> flag as u8) & 1 == 1
     }
 
+    /// Sets the bit of the passed flag
     fn flag_set(&mut self, flag: StatusFlag) {
         self.status |= 1 << flag as u8;
     }
 
+    /// Clears the bit of the passed flag
     fn flag_clear(&mut self, flag: StatusFlag) {
         self.status &= !(1 << flag as u8)
+    }
+
+    /// Checks if the passed byte is 0 and negative and updates the relevant flags
+    fn update_zero_and_negative_flags(&mut self, result: u8) {
+        if result == 0 {
+            self.flag_set(StatusFlag::Zero);
+        } else {
+            self.flag_clear(StatusFlag::Zero);
+        }
+
+        // check for negative flag
+        if result & 0x80 != 0 {
+            self.flag_set(StatusFlag::Negative);
+        } else {
+            self.flag_clear(StatusFlag::Negative);
+        }
     }
 
     pub fn run(&mut self) {
@@ -143,20 +163,182 @@ impl CPU {
         }
 
         // determine overflow flag status
-        let overflow_happened = ()
-        if (!(self.acc ^ operand) as u16 & (self.acc as u16 ^ result) & 0x80) != 0 {
+        let overflow_occurred = (self.acc ^ operand) & (self.acc ^ (result as u8)) & 0x80 != 0;
+        if overflow_occurred {
             self.flag_set(StatusFlag::Overflow);
         } else {
             self.flag_clear(StatusFlag::Overflow);
         }
 
-        // determine negative flag status
-        if result & 0x80 != 0 {
+        // determine negative and zero flag status
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    /// perform a logical and bit by bit on the accumulator and the operand
+    fn and(&mut self, operand: u8) {
+        self.acc &= operand;
+
+        // determine negative and zero flag status
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    /// shift the bits of the accumulator left 1 and place the MSB in the Carry bit
+    fn asl(&mut self, operand: u8) {
+        let msb = self.acc >> 7;
+
+        self.acc <<= 1;
+
+        if msb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        // determine negative and zero flag status
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    /// if the carry flag is clear (0)
+    /// add the operand (an i8) to the program counter
+    fn bcc(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if !self.flag_status(StatusFlag::Carry) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    /// if the carry flag is set (1)
+    /// adds the operand (an i8) to the program counter
+    fn bcs(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if self.flag_status(StatusFlag::Carry) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    /// if the zero flag is set (1)
+    /// adds the operand (an i8) to the program counter
+    fn beq(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if self.flag_status(StatusFlag::Zero) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    /// Logical AND of accumulator and operand, storing bits 6 and 7 of the result
+    /// in the overflow and negative flags
+    fn bit(&mut self, operand: u8) {
+        let result = self.acc & operand;
+
+        if result == 0 {
+            self.flag_set(StatusFlag::Zero);
+        } else {
+            self.flag_clear(StatusFlag::Zero);
+        }
+
+        if (operand >> 6) & 1 == 1 {
+            self.flag_set(StatusFlag::Overflow);
+        } else {
+            self.flag_clear(StatusFlag::Overflow);
+        }
+
+        if (operand >> 7) & 1 == 1 {
             self.flag_set(StatusFlag::Negative);
         } else {
-            // clear negative flag
             self.flag_clear(StatusFlag::Negative);
         }
+    }
+
+    /// if the negative flag is set (1)
+    /// adds the operand (an i8) to the program counter
+    fn bmi(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if self.flag_status(StatusFlag::Negative) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    /// if the zero flag is clear (0)
+    /// adds the operand (an i8) to the program counter
+    fn bne(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if !self.flag_status(StatusFlag::Zero) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    /// if the negative flag is clear (0)
+    /// adds the operand (an i8) to the program counter
+    fn bpl(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if !self.flag_status(StatusFlag::Negative) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    fn brk(&self, operand: u8) {
+        // https://www.nesdev.org/obelisk-6502-guide/reference.html#BRK
+        todo!()
+    }
+
+    /// if the overflow flag is clear (0)
+    /// adds the operand (an i8) to the program counter
+    fn bvc(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if !self.flag_status(StatusFlag::Overflow) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    /// if the overflow flag is set (1)
+    /// adds the operand (an i8) to the program counter
+    fn bvs(&mut self, operand: u8) {
+        let offset = operand as i8;
+
+        if self.flag_status(StatusFlag::Overflow) {
+            self.pcounter = (self.pcounter as isize + offset as isize) as usize;
+        }
+    }
+
+    /// Clear the carry flag to zero
+    fn clc(&mut self) {
+        self.flag_clear(StatusFlag::Carry);
+    }
+
+    /// Clear the Decimal flag to zero
+    fn cld(&mut self) {
+        self.flag_clear(StatusFlag::Decimal);
+    }
+
+    /// Clear the Interrupt Disable flag to zero
+    fn cli(&mut self) {
+        self.flag_clear(StatusFlag::InterruptDisable);
+    }
+
+    /// Clear the Overflow flag to zero
+    fn clv(&mut self) {
+        self.flag_clear(StatusFlag::Overflow);
+    }
+
+    /// Compare accumulator with operand
+    fn cmp(&mut self, operand: u8) {
+        let result = self.acc - operand;
+
+        // Determine Carry flag status
+        if self.acc >= operand {
+            self.flag_set(StatusFlag::Carry);
+        } else {
+            self.flag_clear(StatusFlag::Carry);
+        }
+
+        self.update_zero_and_negative_flags(result as u8);
     }
 }
 
@@ -164,16 +346,16 @@ enum Instruction {
     ADC(AddressingMode),
     AND(AddressingMode),
     ASL(AddressingMode),
-    BCC(AddressingMode),
-    BCS(AddressingMode),
-    BEQ(AddressingMode),
+    BCC,
+    BCS,
+    BEQ,
     BIT(AddressingMode),
-    BMI(AddressingMode),
-    BNE(AddressingMode),
-    BPL(AddressingMode),
+    BMI,
+    BNE,
+    BPL,
     BRK,
-    BVC(AddressingMode),
-    BVS(AddressingMode),
+    BVC,
+    BVS,
     CLC,
     CLD,
     CLI,
@@ -276,5 +458,166 @@ mod test {
         assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
         assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
         assert_eq!(cpu.flag_status(StatusFlag::Zero), true);
+    }
+
+    #[test]
+    fn test_adc() {
+        let mut cpu = CPU::default();
+        cpu.acc = 5;
+        cpu.adc(10);
+        assert_eq!(cpu.acc, 15);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Overflow), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_and() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b00001111;
+        cpu.and(0b11110000);
+        assert_eq!(cpu.acc, 0);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_asl() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b10001111;
+        cpu.asl(cpu.acc);
+        assert_eq!(cpu.acc, 0b00011110);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_bcc_with_carry_clear() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_clear(StatusFlag::Carry);
+        cpu.bcc(5);
+        assert_eq!(cpu.pcounter, 15);
+    }
+
+    #[test]
+    fn test_bcc_with_carry_set() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_set(StatusFlag::Carry);
+        cpu.bcc(5);
+        assert_eq!(cpu.pcounter, 10);
+    }
+
+    #[test]
+    fn test_bcs_carry_set() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_set(StatusFlag::Carry);
+        cpu.bcs(5);
+        assert_eq!(cpu.pcounter, 15);
+    }
+
+    #[test]
+    fn test_bcs_carry_clear() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_clear(StatusFlag::Carry);
+        cpu.bcs(5);
+        assert_eq!(cpu.pcounter, 10);
+    }
+
+    #[test]
+    fn test_beq_zero_set() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_set(StatusFlag::Zero);
+        cpu.beq(5);
+        assert_eq!(cpu.pcounter, 15);
+    }
+
+    #[test]
+    fn test_beq_zero_clear() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_clear(StatusFlag::Zero);
+        cpu.beq(5);
+        assert_eq!(cpu.pcounter, 10);
+    }
+
+    #[test]
+    fn test_bit_zero_result() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b00001111;
+        cpu.bit(0b11110000);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Overflow), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), true);
+    }
+
+    #[test]
+    fn test_bit_nonzero_result() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b00001111;
+        cpu.bit(0b00001111);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Overflow), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_bmi_negative_set() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_set(StatusFlag::Negative);
+        cpu.bmi(5);
+        assert_eq!(cpu.pcounter, 15);
+    }
+
+    #[test]
+    fn test_bmi_negative_clear() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_clear(StatusFlag::Negative);
+        cpu.bmi(5);
+        assert_eq!(cpu.pcounter, 10);
+    }
+
+    #[test]
+    fn test_bne_zero_set() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_set(StatusFlag::Zero);
+        cpu.bne(5);
+        assert_eq!(cpu.pcounter, 10);
+    }
+
+    #[test]
+    fn test_bne_zero_clear() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_clear(StatusFlag::Zero);
+        cpu.bne(5);
+        assert_eq!(cpu.pcounter, 15);
+    }
+
+    #[test]
+    fn test_bpl_negative_set() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_set(StatusFlag::Negative);
+        cpu.bpl(5);
+        assert_eq!(cpu.pcounter, 10);
+    }
+
+    #[test]
+    fn test_bpl_negative_clear() {
+        let mut cpu = CPU::default();
+        cpu.pcounter = 10;
+        cpu.flag_clear(StatusFlag::Negative);
+        cpu.bpl(5);
+        assert_eq!(cpu.pcounter, 15);
     }
 }
