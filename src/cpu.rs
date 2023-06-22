@@ -111,6 +111,15 @@ impl CPU {
         }
     }
 
+    /// Reads the byte at an address in memory
+    fn read(&self, address: u16) -> u8 {
+        self.mem[address as usize]
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        self.mem[address as usize] = value;
+    }
+
     pub fn run(&mut self) {
         // main loop of reading opcode and executing instruction
         loop {
@@ -328,17 +337,90 @@ impl CPU {
     }
 
     /// Compare accumulator with operand
-    fn cmp(&mut self, operand: u8) {
-        let result = self.acc - operand;
-
-        // Determine Carry flag status
-        if self.acc >= operand {
-            self.flag_set(StatusFlag::Carry);
-        } else {
-            self.flag_clear(StatusFlag::Carry);
+    fn byte_cmp(&mut self, rhs: u8, lhs: u8) {
+        let result = rhs.wrapping_sub(lhs) >> 7;
+        match rhs.cmp(&lhs) {
+            std::cmp::Ordering::Less => {
+                self.flag_clear(StatusFlag::Zero);
+                self.flag_clear(StatusFlag::Carry);
+                if result == 1 {
+                    self.flag_set(StatusFlag::Negative);
+                } else {
+                    self.flag_clear(StatusFlag::Zero);
+                }
+            }
+            std::cmp::Ordering::Equal => {
+                self.flag_clear(StatusFlag::Negative);
+                self.flag_set(StatusFlag::Zero);
+                self.flag_set(StatusFlag::Carry);
+            }
+            std::cmp::Ordering::Greater => {
+                self.flag_clear(StatusFlag::Zero);
+                self.flag_set(StatusFlag::Carry);
+                if result == 1 {
+                    self.flag_set(StatusFlag::Negative);
+                } else {
+                    self.flag_clear(StatusFlag::Zero);
+                }
+            }
         }
+    }
 
-        self.update_zero_and_negative_flags(result as u8);
+    /// Compare the accumulator with operand
+    fn cmp(&mut self, operand: u8) {
+        self.byte_cmp(self.acc, operand);
+    }
+
+    /// Compare X register with operand
+    fn cpx(&mut self, operand: u8) {
+        self.byte_cmp(self.x, operand);
+    }
+
+    /// Compare Y register with operand
+    fn cpy(&mut self, operand: u8) {
+        self.byte_cmp(self.y, operand);
+    }
+
+    /// Decrement whatever value is held at the memory location of the operand
+    fn dec(&mut self, address: u16) {
+        self.write(address, self.read(address).wrapping_sub(1));
+        self.update_zero_and_negative_flags(self.read(address))
+    }
+
+    /// Decrement value in the X register
+    fn dex(&mut self) {
+        self.x = self.x.wrapping_sub(1);
+        self.update_zero_and_negative_flags(self.x);
+    }
+
+    /// Decrement value in the Y register
+    fn dey(&mut self) {
+        self.y = self.y.wrapping_sub(1);
+        self.update_zero_and_negative_flags(self.y);
+    }
+
+    /// performs an XOR on the accumulator and the operand
+    fn eor(&mut self, operand: u8) {
+        self.acc ^= operand;
+        self.update_zero_and_negative_flags(self.acc)
+    }
+
+    /// Increment value in memory at operand
+    fn inc(&mut self, address: u16) {
+        self.write(address, self.read(address).wrapping_add(1));
+        self.update_zero_and_negative_flags(self.read(address));
+    }
+
+    /// Increment the X register by 1
+    fn inx(&mut self) {
+        self.x = self.x.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.x);
+    }
+
+    /// Increment the Y register by 1
+    fn iny(&mut self) {
+        self.y = self.y.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.y);
     }
 }
 
@@ -619,5 +701,279 @@ mod test {
         cpu.flag_clear(StatusFlag::Negative);
         cpu.bpl(5);
         assert_eq!(cpu.pcounter, 15);
+    }
+
+    // CMP - Compare accumulator
+    #[test]
+    fn test_cmp_equal() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x42;
+        cpu.cmp(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_cmp_less() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x30;
+        cpu.cmp(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), true);
+    }
+
+    #[test]
+    fn test_cmp_more() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x50;
+        cpu.cmp(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    // CPX - Compare X Register
+    #[test]
+    fn test_cpx_equal() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x42;
+        cpu.cpx(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_cpx_less() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x30;
+        cpu.cpx(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), true);
+    }
+
+    #[test]
+    fn test_cpx_more() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x50;
+        cpu.cpx(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    // CPY - Compare Y Register
+    #[test]
+    fn test_cpy_equal() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x42;
+        cpu.cpy(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_cpy_less() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x30;
+        cpu.cpy(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), true);
+    }
+
+    #[test]
+    fn test_cpy_more() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x50;
+        cpu.cpy(0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    // DEC - Decrement Memory
+    #[test]
+    fn test_dec_zero() {
+        let mut cpu = CPU::default();
+        cpu.mem[0x42] = 1;
+        cpu.dec(0x42);
+        assert_eq!(cpu.mem[0x42], 0);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_dec_negative() {
+        let mut cpu = CPU::default();
+        cpu.mem[0x42] = 0;
+        cpu.dec(0x42);
+        assert_eq!(cpu.mem[0x42], 0xFF);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), true);
+    }
+
+    #[test]
+    fn test_dec_positive() {
+        let mut cpu = CPU::default();
+        cpu.mem[0x42] = 0x43;
+        cpu.dec(0x42);
+        assert_eq!(cpu.mem[0x42], 0x42);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    // DEX - Decrement X Register
+    #[test]
+    fn test_dex() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x42;
+        cpu.dex();
+        assert_eq!(cpu.x, 0x41);
+    }
+
+    #[test]
+    fn test_dex_zero() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x01;
+        cpu.dex();
+        assert_eq!(cpu.x, 0x00);
+    }
+
+    #[test]
+    fn test_dex_underflow() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x00;
+        cpu.dex();
+        assert_eq!(cpu.x, 0xFF);
+    }
+
+    // DEY - Decrement Y Register
+    #[test]
+    fn test_dey() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x42;
+        cpu.dey();
+        assert_eq!(cpu.y, 0x41);
+    }
+
+    #[test]
+    fn test_dey_zero() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x01;
+        cpu.dey();
+        assert_eq!(cpu.y, 0x00);
+    }
+
+    #[test]
+    fn test_dey_underflow() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x00;
+        cpu.dey();
+        assert_eq!(cpu.y, 0xFF);
+    }
+
+    // EOR - Exclusive OR
+    #[test]
+    fn test_eor() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x42;
+        cpu.eor(0x24);
+        assert_eq!(cpu.acc, 0x66);
+    }
+
+    #[test]
+    fn test_eor_zero() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x42;
+        cpu.eor(0x42);
+        assert_eq!(cpu.acc, 0x00);
+    }
+
+    #[test]
+    fn test_eor_same() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x00;
+        cpu.eor(0x00);
+        assert_eq!(cpu.acc, 0x00);
+    }
+
+    // INC - Increment Memory
+    #[test]
+    fn test_inc() {
+        let mut cpu = CPU::default();
+        cpu.mem[0x2000] = 0x42;
+        cpu.inc(0x2000);
+        assert_eq!(cpu.mem[0x2000], 0x43);
+    }
+
+    #[test]
+    fn test_inc_overflow() {
+        let mut cpu = CPU::default();
+        cpu.mem[0x2000] = 0xFF;
+        cpu.inc(0x2000);
+        assert_eq!(cpu.mem[0x2000], 0x00);
+    }
+
+    #[test]
+    fn test_inc_zero() {
+        let mut cpu = CPU::default();
+        cpu.mem[0x2000] = 0x00;
+        cpu.inc(0x2000);
+        assert_eq!(cpu.mem[0x2000], 0x01);
+    }
+
+    // INX - Increment X Register
+    #[test]
+    fn test_inx() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x42;
+        cpu.inx();
+        assert_eq!(cpu.x, 0x43);
+    }
+
+    #[test]
+    fn test_inx_overflow() {
+        let mut cpu = CPU::default();
+        cpu.x = 0xFF;
+        cpu.inx();
+        assert_eq!(cpu.x, 0x00);
+    }
+
+    #[test]
+    fn test_inx_zero() {
+        let mut cpu = CPU::default();
+        cpu.x = 0x00;
+        cpu.inx();
+        assert_eq!(cpu.x, 0x01);
+    }
+
+    // INY - Increment Y Register
+    #[test]
+    fn test_iny() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x42;
+        cpu.iny();
+        assert_eq!(cpu.y, 0x43);
+    }
+
+    #[test]
+    fn test_iny_overflow() {
+        let mut cpu = CPU::default();
+        cpu.y = 0xFF;
+        cpu.iny();
+        assert_eq!(cpu.y, 0x00);
+    }
+
+    #[test]
+    fn test_iny_zero() {
+        let mut cpu = CPU::default();
+        cpu.y = 0x00;
+        cpu.iny();
+        assert_eq!(cpu.y, 0x01);
     }
 }
