@@ -1,7 +1,8 @@
+use core::panicking::panic;
+
 use log::{debug, error, info, trace, warn};
 
 #[repr(u8)]
-
 enum StatusFlag {
     Carry = 0,
     Zero = 1,
@@ -16,7 +17,7 @@ pub struct CPU {
     pcounter: usize,
 
     /// stack pointer, can only access 256 bytes from 0x0100-0x01FF
-    stack_ptr: usize,
+    stack_ptr: u8,
 
     /// the X and Y registers
     x: u8,
@@ -73,11 +74,25 @@ impl CPU {
     }
 
     /// Read the opcode at the current program counter's location
-    fn read_opcode(&self) -> u16 {
-        let byte1 = self.mem[self.pcounter] as u16;
-        let byte2 = self.mem[self.pcounter + 1] as u16;
+    fn read_opcode(&mut self) -> u8 {
+        unimplemented!()
+    }
 
-        (byte1 << 8) | byte2
+    /// Decode the opcode to an Instruction
+    fn decode(&self, opcode: u16) -> Instruction {
+        match opcode {
+            // Add with Carry (ADC)   // Addressing Mode
+            0x69 => Instruction::ADC(AddressingMode::Immediate),
+            0x65 => Instruction::ADC(AddressingMode::ZeroPage), 
+            0x75 => Instruction::ADC(AddressingMode::ZeroPageX),
+            0x6D => Instruction::ADC(AddressingMode::Absolute), 
+            0x7D => Instruction::ADC(AddressingMode::AbsoluteX),
+            0x79 => Instruction::ADC(AddressingMode::AbsoluteY),
+            0x61 => Instruction::ADC(AddressingMode::IndirectX),
+            0x71 => Instruction::ADC(AddressingMode::IndirectY),
+
+            _ => panic!("Fatal Error: Instruction not implemented"),
+        }
     }
 
     /// Reads the bit of the passed flag
@@ -116,19 +131,39 @@ impl CPU {
         self.mem[address as usize]
     }
 
+    /// Writes a byte of memory to the specified memory address
     fn write(&mut self, address: u16, value: u8) {
         self.mem[address as usize] = value;
+    }
+
+    /// Pushes a byte onto the stack
+    fn stack_push(&mut self, value: u8) {
+        let stack_addr = 0x0100 + self.stack_ptr as u16;
+        self.write(stack_addr, value);
+        match self.stack_ptr.checked_sub(1) {
+            Some(s) => self.stack_ptr = s,
+            None => panic!("Fatal Error: Stack Overflow"),
+        }
+    }
+
+    /// Pops a byte off the stack
+    fn stack_pop(&mut self) -> u8 {
+        let result = self.read(0x0100 + self.stack_ptr as u16);
+        match self.stack_ptr.checked_add(1) {
+            Some(s) => self.stack_ptr = s,
+            None => panic!("Fatal Error: Stack Underflow"),
+        }
+
+        return result;
     }
 
     pub fn run(&mut self) {
         // main loop of reading opcode and executing instruction
         loop {
-            let opcode = self.read_opcode();
-            info!("OPCODE: {:#06x}", opcode);
+            let opcode = self.mem[self.pcounter];
+            info!("OPCODE: 0x{:X}", opcode);
 
-            // split up instruction and arguments
-            let op = opcode >> 8;
-            let arg = opcode & 0xFF;
+            let instr = self.decode(opcode);
 
             debug!("OP:  {:#04x}", op);
             debug!("ARG: {:#04x}", arg);
@@ -192,9 +227,13 @@ impl CPU {
     }
 
     /// shift the bits of the accumulator left 1 and place the MSB in the Carry bit
-    fn asl(&mut self, operand: u8) {
+    fn asl(&mut self, operand: u8, address: Option<u16>) {
+        let operand
+        if let Some(addr) = address {
+            
+        }
+        
         let msb = self.acc >> 7;
-
         self.acc <<= 1;
 
         if msb != 0 {
@@ -422,6 +461,56 @@ impl CPU {
         self.y = self.y.wrapping_add(1);
         self.update_zero_and_negative_flags(self.y);
     }
+
+    /// Set the program counter equal to the address specified by the operand
+    fn jmp(&mut self, operand: u16) {
+        self.pcounter = operand as usize;
+
+        // Bug-for-bug Indirect Addressing Code
+        //
+        // let lsb = self.read(operand);
+        // let msb: u8;
+        //
+        // if (operand & 0xFF == 0xFF) {
+        //     msb = self.read(operand & 0xFF00);
+        // } else {
+        //     msb = self.read(operand + 1);
+        // }
+        //
+        // self.pcounter = (((msb as u16) << 8) | lsb as u16) as usize;
+    }
+
+    /// Pushes return address onto stack and sets pcounter to passed address
+    fn jsr(&mut self, address: u16) {
+        let ra = (self.pcounter - 1) as u16;
+        self.stack_push((ra >> 8) as u8);
+        self.stack_push((ra & 0x00FF) as u8);
+
+        self.pcounter = address as usize;
+    }
+
+    /// Store a value in the accumulator
+    fn lda(&mut self, operand: u8) {
+        self.acc = operand;
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    /// Store a value in the X register
+    fn ldx(&mut self, operand: u8) {
+        self.x = operand;
+        self.update_zero_and_negative_flags(self.x);
+    }
+
+    /// Store a value in the Y register
+    fn ldy(&mut self, operand: u8) {
+        self.y = operand;
+        self.update_zero_and_negative_flags(self.y);
+    }
+
+    fn lsr(&mut self, operand: u8, address: Option<u16>) {
+        
+    }
+
 }
 
 enum Instruction {
@@ -485,15 +574,15 @@ enum Instruction {
 
 pub enum AddressingMode {
     Accumulator,
-    Immediate(u8),
-    ZeroPage(u8),
-    ZeroPageX(u8),
-    ZeroPageY(u8),
-    Absolute(u16),
-    AbsoluteX(u16),
-    AbsoluteY(u16),
-    IndirectX(u8),
-    IndirectY(u8),
+    Immediate,
+    ZeroPage,
+    ZeroPageX,
+    ZeroPageY,
+    Absolute,
+    AbsoluteX,
+    AbsoluteY,
+    IndirectX,
+    IndirectY,
 }
 
 #[cfg(test)]
