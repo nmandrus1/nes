@@ -75,21 +75,75 @@ impl CPU {
 
     /// Read the opcode at the current program counter's location
     fn read_opcode(&mut self) -> u8 {
-        unimplemented!()
+        self.mem[self.pcounter]
+    }
+
+    /// Reads the next byte from memory as an Immediate operand.
+    fn read_immediate(&mut self) -> u8 {
+        let operand = self.read_opcode();
+        operand
+    }
+
+    /// Reads the next byte from memory as a ZeroPage operand.
+    fn read_zero_page(&mut self) -> u8 {
+        let address = self.read_opcode() as u16;
+        self.read(address)
+    }
+
+    /// Reads the next byte from memory as a ZeroPageX operand.
+    fn read_zero_page_x(&mut self) -> u8 {
+        let address = (self.read_opcode() + self.x) as u16;
+        self.read(address)
+    }
+
+    /// Reads the next byte from memory as a ZeroPageY operand.
+    fn read_zero_page_y(&mut self) -> u8 {
+        let address = (self.read_opcode() + self.y) as u16;
+        self.read(address)
+    }
+
+    /// Reads the next two bytes from memory as an Absolute operand.
+    fn read_absolute(&mut self) -> u16 {
+        let low_byte = self.read_opcode() as u16;
+        let high_byte = (self.read_opcode() as u16) << 8;
+        high_byte | low_byte
+    }
+
+    /// Reads the next two bytes from memory and adds the X register to them 
+    /// as an Absolute operand.
+    fn read_absolute_x(&mut self) -> u16 {
+        let low_byte = self.read_opcode() as u16;
+        let high_byte = (self.read_opcode() as u16) << 8;
+        (high_byte | low_byte) + self.x as u16
+    }
+
+    /// Reads the next two bytes from memory and adds the Y register to them 
+    /// as an Absolute operand.
+    fn read_absolute_y(&mut self) -> u16 {
+        let low_byte = self.read_opcode() as u16;
+        let high_byte = (self.read_opcode() as u16) << 8;
+        (high_byte | low_byte) + self.y as u16
+    }
+
+    fn read_indexed_indirect(&mut self) -> u8 {
+        let addr = self.read_opcode().wrapping_add(self.x) as u16;
+        let low_byte = self.read(addr) as u16;
+        let high_byte = (self.read(addr + 1) as u16) << 8;
+        self.read(high_byte | low_byte)
     }
 
     /// Decode the opcode to an Instruction
-    fn decode(&self, opcode: u16) -> Instruction {
+    fn decode(&mut self, opcode: u8) -> Instruction {
         match opcode {
             // Add with Carry (ADC)   // Addressing Mode
-            0x69 => Instruction::ADC(AddressingMode::Immediate),
-            0x65 => Instruction::ADC(AddressingMode::ZeroPage), 
-            0x75 => Instruction::ADC(AddressingMode::ZeroPageX),
-            0x6D => Instruction::ADC(AddressingMode::Absolute), 
-            0x7D => Instruction::ADC(AddressingMode::AbsoluteX),
-            0x79 => Instruction::ADC(AddressingMode::AbsoluteY),
-            0x61 => Instruction::ADC(AddressingMode::IndirectX),
-            0x71 => Instruction::ADC(AddressingMode::IndirectY),
+            0x69 => Instruction::ADC(AddrMode::Immediate(self.read_immediate())), // Immediate
+            0x65 => Instruction::ADC(AddrMode::ZeroPage(self.read_zero_page())),  // Zero Page
+            0x75 => Instruction::ADC(AddrMode::ZeroPageX(self.read_zero_page_x())), // Zero Page, X
+            0x6D => Instruction::ADC(AddrMode::Absolute(self.read_absolute())),  // Absolute
+            0x7D => Instruction::ADC(AddrMode::AbsoluteX(self.read_absolute_x())), // Absolute, X
+            0x79 => Instruction::ADC(AddrMode::AbsoluteY(self.read_absolute_y())), // Absolute, Y
+            0x61 => Instruction::ADC(AddrMode::IndirectX()), // Indirect, X
+            0x71 => Instruction::ADC(AddrMode::IndirectY()), // Indirect, Y
 
             _ => panic!("Fatal Error: Instruction not implemented"),
         }
@@ -160,26 +214,20 @@ impl CPU {
     pub fn run(&mut self) {
         // main loop of reading opcode and executing instruction
         loop {
-            let opcode = self.mem[self.pcounter];
+            let opcode = self.read_opcode();
             info!("OPCODE: 0x{:X}", opcode);
-
+            
+            // increment pcounter
+            self.pcounter += 1;
+            
+            // decode 
             let instr = self.decode(opcode);
 
-            debug!("OP:  {:#04x}", op);
-            debug!("ARG: {:#04x}", arg);
+            // execute
+            match instr {
+                Instruction::ADC(_) 
+            }
 
-            match op {
-                // Add with Carry (ADC)   // Addressing Mode
-                0x69 => unimplemented!(), // Immediate
-                0x65 => unimplemented!(), // Zero Page
-                0x75 => unimplemented!(), // Zero Page, X
-                0x6D => unimplemented!(), // Absolute
-                0x7D => unimplemented!(), // Absolute, X
-                0x79 => unimplemented!(), // Absolute, Y
-                0x61 => unimplemented!(), // Indirect, X
-                0x71 => unimplemented!(), // Indirect, Y
-
-                _ => unreachable!(),
             }
         }
     }
@@ -514,13 +562,13 @@ impl CPU {
 }
 
 enum Instruction {
-    ADC(AddressingMode),
-    AND(AddressingMode),
-    ASL(AddressingMode),
+    ADC(AddrMode),
+    AND(AddrMode),
+    ASL(AddrMode),
     BCC,
     BCS,
     BEQ,
-    BIT(AddressingMode),
+    BIT(AddrMode),
     BMI,
     BNE,
     BPL,
@@ -531,39 +579,39 @@ enum Instruction {
     CLD,
     CLI,
     CLV,
-    CMP(AddressingMode),
-    CPX(AddressingMode),
-    CPY(AddressingMode),
-    DEC(AddressingMode),
+    CMP(AddrMode),
+    CPX(AddrMode),
+    CPY(AddrMode),
+    DEC(AddrMode),
     DEX,
     DEY,
-    EOR(AddressingMode),
-    INC(AddressingMode),
+    EOR(AddrMode),
+    INC(AddrMode),
     INX,
     INY,
-    JMP(AddressingMode),
-    JSR(AddressingMode),
-    LDA(AddressingMode),
-    LDX(AddressingMode),
-    LDY(AddressingMode),
-    LSR(AddressingMode),
+    JMP(AddrMode),
+    JSR(AddrMode),
+    LDA(AddrMode),
+    LDX(AddrMode),
+    LDY(AddrMode),
+    LSR(AddrMode),
     NOP,
-    ORA(AddressingMode),
+    ORA(AddrMode),
     PHA,
     PHP,
     PLA,
     PLP,
-    ROL(AddressingMode),
-    ROR(AddressingMode),
+    ROL(AddrMode),
+    ROR(AddrMode),
     RTI,
     RTS,
-    SBC(AddressingMode),
+    SBC(AddrMode),
     SEC,
     SED,
     SEI,
-    STA(AddressingMode),
-    STX(AddressingMode),
-    STY(AddressingMode),
+    STA(AddrMode),
+    STX(AddrMode),
+    STY(AddrMode),
     TAX,
     TAY,
     TSX,
@@ -572,22 +620,87 @@ enum Instruction {
     TYA,
 }
 
-pub enum AddressingMode {
-    Accumulator,
-    Immediate,
-    ZeroPage,
-    ZeroPageX,
-    ZeroPageY,
-    Absolute,
-    AbsoluteX,
-    AbsoluteY,
-    IndirectX,
-    IndirectY,
+pub enum AddrMode {
+    Immediate(u8),
+    ZeroPage(u8),
+    ZeroPageX(u8),
+    ZeroPageY(u8),
+    Absolute(u16),
+    AbsoluteX(u16),
+    AbsoluteY(u16),
+    IndirectX(u16),
+    IndirectY(u16),
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_read_immediate() {
+        let mut cpu = CPU::default();
+        cpu.load_rom(&[0x69, 0x05]).unwrap();
+        let result = cpu.read_immediate();
+        assert_eq!(result, 0x05, "Immediate read failed");
+    }
+
+    #[test]
+    fn test_read_zero_page() {
+        let mut cpu = CPU::default();
+        cpu.load_rom(&[0x65, 0x05]).unwrap();
+        cpu.mem[0x05] = 0xA3;
+        let result = cpu.read_zero_page();
+        assert_eq!(result, 0xA3, "Zero Page read failed");
+    }
+
+    #[test]
+    fn test_read_zero_page_x() {
+        let mut cpu = CPU::default();
+        cpu.load_rom(&[0x75, 0x05]).unwrap();
+        cpu.x = 0x03;
+        cpu.mem[0x08] = 0xB4;
+        let result = cpu.read_zero_page_x();
+        assert_eq!(result, 0xB4, "Zero Page, X read failed");
+    }
+
+    #[test]
+    fn test_read_zero_page_y() {
+        let mut cpu = CPU::default();
+        cpu.load_rom(&[0x76, 0x05]).unwrap();
+        cpu.y = 0x04;
+        cpu.mem[0x09] = 0xC5;
+        let result = cpu.read_zero_page_y();
+        assert_eq!(result, 0xC5, "Zero Page, Y read failed");
+    }
+
+    #[test]
+    fn test_read_absolute() {
+        let mut cpu = CPU::default();
+        cpu.load_rom(&[0x6D, 0x00, 0x05]).unwrap();
+        cpu.mem[0x0500] = 0xD6;
+        let result = cpu.read_absolute();
+        assert_eq!(result, 0xD6, "Absolute read failed");
+    }
+
+    #[test]
+    fn test_read_absolute_x() {
+        let mut cpu = CPU::default();
+        cpu.load_rom(&[0x7D, 0x00, 0x05]).unwrap();
+        cpu.x = 0x03;
+        cpu.mem[0x0503] = 0xE7;
+        let result = cpu.read_absolute_x();
+        assert_eq!(result, 0xE7, "Absolute, X read failed");
+    }
+
+    #[test]
+    fn test_read_absolute_y() {
+        let mut cpu = CPU::default();
+        cpu.load_rom(&[0x79, 0x00, 0x05]).unwrap();
+        cpu.y = 0x04;
+        cpu.mem[0x0504] = 0xF8;
+        let result = cpu.read_absolute_y();
+        assert_eq!(result, 0xF8, "Absolute, Y read failed");
+    }
 
     #[test]
     fn test_flag_status() {
