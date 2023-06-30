@@ -138,6 +138,8 @@ impl CPU {
                 self.pc += 1;
                 (hi << 8 | lo).wrapping_add(self.y.into())
             }
+
+            AddrMode::Accumulator => panic!("This should never happen!!"),
         }
     }
 
@@ -227,9 +229,20 @@ impl CPU {
                 let operand = self.read(address);
                 self.adc(operand);
             }
-            Instruction::ADC(mode) => {}
-            Instruction::AND(mode) => {}
-            Instruction::ASL(mode) => {}
+
+            Instruction::AND(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.and(operand);
+            }
+
+            Instruction::ASL(mode) => match mode {
+                AddrMode::Accumulator => self.asl_accumulator(),
+                _ => {
+                    let address = self.get_address(mode);
+                    self.asl(address);
+                }
+            },
             Instruction::BCC => {}
             Instruction::BCS => {}
             Instruction::BEQ => {}
@@ -345,9 +358,32 @@ impl CPU {
     }
 
     /// shift the bits of the operand left 1 and place the MSB in the Carry bit
-    fn asl(&mut self, operand: &mut u8) {
-        let msb = *operand >> 7;
-        *operand <<= 1;
+    fn asl(&mut self, address: u16) {
+        // read byte of memory
+        let mut operand = self.read(address);
+
+        // perform shift
+        let msb = operand >> 7;
+        operand <<= 1;
+
+        // write value back to memory
+        self.write(address, operand);
+
+        if msb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        // determine negative and zero flag status
+        self.update_zero_and_negative_flags(operand);
+    }
+
+    /// shift the bits of the operand left 1 and place the MSB in the Carry bit
+    fn asl_accumulator(&mut self) {
+        // perform shift
+        let msb = self.acc >> 7;
+        self.acc <<= 1;
 
         if msb != 0 {
             self.flag_set(StatusFlag::Carry)
@@ -683,6 +719,7 @@ enum Instruction {
 }
 
 pub enum AddrMode {
+    Accumulator,
     Immediate,
     ZeroPage,
     ZeroPageX,
@@ -765,8 +802,19 @@ mod test {
     #[test]
     fn test_asl() {
         let mut cpu = CPU::default();
+        cpu.mem[0x0005] = 0b00001111;
+        cpu.asl(0x0005);
+        assert_eq!(cpu.mem[0x0005], 0b00011110);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    #[test]
+    fn test_asl_accumulator() {
+        let mut cpu = CPU::default();
         cpu.acc = 0b10001111;
-        cpu.asl(cpu.acc);
+        cpu.asl_accumulator();
         assert_eq!(cpu.acc, 0b00011110);
         assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
         assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
