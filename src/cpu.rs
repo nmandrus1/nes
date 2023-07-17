@@ -15,7 +15,7 @@ pub struct CPU {
     pc: u16,
 
     /// stack pointer, can only access 256 bytes from 0x0100-0x01FF
-    stack_ptr: u8,
+    sp: u8,
 
     /// the X and Y registers
     x: u8,
@@ -46,7 +46,7 @@ impl Default for CPU {
         // default state of CPU after powering on
         Self {
             pc: 0,
-            stack_ptr: 0xFD,
+            sp: 0xFD,
             x: 0,
             y: 0,
             acc: 0,
@@ -78,7 +78,7 @@ impl CPU {
 
     fn get_address(&mut self, mode: AddrMode) -> u16 {
         match mode {
-            AddrMode::Immediate => {
+            AddrMode::Immediate | AddrMode::Relative => {
                 let address = self.pc;
                 self.pc += 1;
                 address as u16
@@ -203,19 +203,19 @@ impl CPU {
 
     /// Pushes a byte onto the stack
     fn stack_push(&mut self, value: u8) {
-        let stack_addr = 0x0100 + self.stack_ptr as u16;
+        let stack_addr = 0x0100 + self.sp as u16;
         self.write(stack_addr, value);
-        match self.stack_ptr.checked_sub(1) {
-            Some(s) => self.stack_ptr = s,
+        match self.sp.checked_sub(1) {
+            Some(s) => self.sp = s,
             None => panic!("Fatal Error: Stack Overflow"),
         }
     }
 
     /// Pops a byte off the stack
     fn stack_pop(&mut self) -> u8 {
-        let result = self.read(0x0100 + self.stack_ptr as u16);
-        match self.stack_ptr.checked_add(1) {
-            Some(s) => self.stack_ptr = s,
+        let result = self.read(0x0100 + self.sp as u16);
+        match self.sp.checked_add(1) {
+            Some(s) => self.sp = s,
             None => panic!("Fatal Error: Stack Underflow"),
         }
 
@@ -243,47 +243,183 @@ impl CPU {
                     self.asl(address);
                 }
             },
-            Instruction::BCC => {}
-            Instruction::BCS => {}
-            Instruction::BEQ => {}
-            Instruction::BIT(mode) => {}
-            Instruction::BMI => {}
-            Instruction::BNE => {}
-            Instruction::BPL => {}
-            Instruction::BRK => {}
-            Instruction::BVC => {}
-            Instruction::BVS => {}
-            Instruction::CLC => {}
-            Instruction::CLD => {}
-            Instruction::CLI => {}
-            Instruction::CLV => {}
-            Instruction::CMP(mode) => {}
-            Instruction::CPX(mode) => {}
-            Instruction::CPY(mode) => {}
-            Instruction::DEC(mode) => {}
-            Instruction::DEX => {}
-            Instruction::DEY => {}
-            Instruction::EOR(mode) => {}
-            Instruction::INC(mode) => {}
-            Instruction::INX => {}
-            Instruction::INY => {}
-            Instruction::JMP(mode) => {}
-            Instruction::JSR(mode) => {}
-            Instruction::LDA(mode) => {}
-            Instruction::LDX(mode) => {}
-            Instruction::LDY(mode) => {}
-            Instruction::LSR(mode) => {}
-            Instruction::NOP => {}
-            Instruction::ORA(mode) => {}
-            Instruction::PHA => {}
-            Instruction::PHP => {}
-            Instruction::PLA => {}
-            Instruction::PLP => {}
-            Instruction::ROL(mode) => {}
-            Instruction::ROR(mode) => {}
-            Instruction::RTI => {}
-            Instruction::RTS => {}
-            Instruction::SBC(mode) => {}
+
+            Instruction::BCC => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.bcc(operand);
+            }
+
+            Instruction::BCS => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.bcs(operand);
+            }
+
+            Instruction::BEQ => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.beq(operand);
+            }
+
+            Instruction::BIT(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.bit(operand);
+            }
+
+            Instruction::BMI => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.bmi(operand);
+            }
+
+            Instruction::BNE => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.bne(operand);
+            }
+
+            Instruction::BPL => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.bpl(operand);
+            }
+
+            Instruction::BRK => {
+                todo!()
+            }
+
+            Instruction::BVC => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.bpl(operand);
+            }
+
+            Instruction::BVS => {
+                let address = self.get_address(AddrMode::Relative);
+                let operand = self.read(address);
+                self.bpl(operand);
+            }
+
+            Instruction::CLC => self.clc(),
+            Instruction::CLD => self.cld(),
+            Instruction::CLI => self.cli(),
+            Instruction::CLV => self.clv(),
+
+            Instruction::CMP(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.cmp(operand);
+            }
+
+            Instruction::CPX(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.cpx(operand);
+            }
+
+            Instruction::CPY(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.cpy(operand);
+            }
+
+            Instruction::DEC(mode) => {
+                let address = self.get_address(mode);
+                self.dec(address);
+            }
+
+            Instruction::DEX => self.dex(),
+            Instruction::DEY => self.dey(),
+
+            Instruction::EOR(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.eor(operand);
+            }
+
+            Instruction::INC(mode) => {
+                let address = self.get_address(mode);
+                self.inc(address);
+            }
+
+            Instruction::INX => self.inx(),
+            Instruction::INY => self.iny(),
+            Instruction::JMP(mode) => {
+                let address = self.get_address(mode);
+                self.jmp(address);
+            }
+
+            Instruction::JSR(mode) => {
+                let address = self.get_address(mode);
+                self.jsr(address);
+            }
+
+            Instruction::LDA(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.lda(operand);
+            }
+            Instruction::LDX(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.ldx(operand);
+            }
+            Instruction::LDY(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.ldy(operand);
+            }
+
+            // ######### EVERY INSTRUCTION AFTER THIS LINE NEEDS TESTS ######### //
+            Instruction::LSR(mode) => match mode {
+                AddrMode::Accumulator => self.lsr_accumulator(),
+                _ => {
+                    let address = self.get_address(mode);
+                    self.lsr(address);
+                }
+            },
+
+            Instruction::NOP => self.nop(),
+
+            Instruction::ORA(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.ora(operand);
+            }
+
+            Instruction::PHA => self.pha(),
+            Instruction::PHP => self.php(),
+            Instruction::PLA => self.pla(),
+            Instruction::PLP => self.plp(),
+
+            Instruction::ROL(mode) => match mode {
+                AddrMode::Accumulator => self.rol_accumulator(),
+                _ => {
+                    let address = self.get_address(mode);
+                    self.rol(address);
+                }
+            },
+
+            Instruction::ROR(mode) => match mode {
+                AddrMode::Accumulator => self.ror_accumulator(),
+                _ => {
+                    let address = self.get_address(mode);
+                    self.ror(address);
+                }
+            },
+
+            Instruction::RTI => self.rti(),
+
+            Instruction::RTS => self.rts(),
+
+            Instruction::SBC(mode) => {
+                let address = self.get_address(mode);
+                let operand = self.read(address);
+                self.sbc(operand);
+            }
+
             Instruction::SEC => {}
             Instruction::SED => {}
             Instruction::SEI => {}
@@ -612,8 +748,8 @@ impl CPU {
     }
 
     /// Set the program counter equal to the address specified by the operand
-    fn jmp(&mut self, operand: u16) {
-        self.pc = operand;
+    fn jmp(&mut self, address: u16) {
+        todo!()
 
         // Bug-for-bug Indirect Addressing Code
         //
@@ -656,7 +792,179 @@ impl CPU {
         self.update_zero_and_negative_flags(self.y);
     }
 
-    fn lsr(&mut self, operand: u8, address: Option<u16>) {}
+    /// shift the bits of the operand right 1 and place the LSB in the Carry bit
+    fn lsr(&mut self, address: u16) {
+        // read byte of memory
+        let mut operand = self.read(address);
+
+        // perform shift
+        let lsb = operand & 1;
+        operand >>= 1;
+
+        // write value back to memory
+        self.write(address, operand);
+
+        if lsb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        // determine negative and zero flag status
+        self.update_zero_and_negative_flags(operand);
+    }
+
+    /// shift the bits of the accumulator right 1 and place the LSB in the Carry bit
+    fn lsr_accumulator(&mut self) {
+        // perform shift
+        let lsb = self.acc & 1;
+        self.acc >>= 1;
+
+        if lsb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        // determine negative and zero flag status
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    fn nop(&mut self) {
+        self.pc += 1;
+    }
+
+    /// Perform a logical OR on the accumulator and operand
+    fn ora(&mut self, operand: u8) {
+        self.acc |= operand;
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    fn pha(&mut self) {
+        self.stack_push(self.acc)
+    }
+
+    fn php(&mut self) {
+        self.stack_push(self.status)
+    }
+
+    /// Pops a byte off the stack and stores it in the accumulator
+    fn pla(&mut self) {
+        self.acc = self.stack_pop();
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    fn plp(&mut self) {
+        self.status = self.stack_pop()
+    }
+
+    /// Move each bit one to the left and bit 0 is filled with the carry bit
+    fn rol(&mut self, address: u16) {
+        let carry_bit = self.flag_status(StatusFlag::Carry) as u8;
+
+        let mut operand = self.read(address);
+
+        let msb = operand >> 7;
+        if msb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        operand = (operand << 1) | carry_bit;
+        self.write(address, operand);
+
+        self.update_zero_and_negative_flags(operand);
+    }
+
+    /// Move each bit one to the left and bit 0 is filled with the carry bit
+    fn rol_accumulator(&mut self) {
+        let carry_bit = self.flag_status(StatusFlag::Carry) as u8;
+
+        let msb = self.acc >> 7;
+        if msb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        self.acc = (self.acc << 1) | carry_bit;
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    /// Move each bit one to the right and bit 7 is filled with the carry bit
+    fn ror(&mut self, address: u16) {
+        let carry_bit = self.flag_status(StatusFlag::Carry) as u8;
+
+        let mut operand = self.read(address);
+
+        let lsb = operand & 1;
+        if lsb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        operand = (operand >> 1) | (carry_bit << 7);
+        self.write(address, operand);
+        self.update_zero_and_negative_flags(operand);
+    }
+
+    /// Move each bit one to the right and bit 7 is filled with the carry bit
+    fn ror_accumulator(&mut self) {
+        let carry_bit = self.flag_status(StatusFlag::Carry) as u8;
+
+        let lsb = self.acc & 1;
+        if lsb != 0 {
+            self.flag_set(StatusFlag::Carry)
+        } else {
+            self.flag_clear(StatusFlag::Carry)
+        }
+
+        self.acc = (self.acc >> 1) | (carry_bit << 7);
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    // pull the processor status and program counter from the stack
+    fn rti(&mut self) {
+        self.status = self.stack_pop();
+        let hi = self.stack_pop() as u16;
+        let lo = self.stack_pop() as u16;
+        self.pc = hi << 8 | lo;
+    }
+
+    // pull the program counter - 1 from the stack
+    fn rts(&mut self) {
+        let lo = self.stack_pop() as u16;
+        let hi = self.stack_pop() as u16;
+        self.pc = (hi << 8 | lo) + 1;
+    }
+
+    fn sbc(&mut self, operand: u8) {
+        let carry = if self.flag_status(StatusFlag::Carry) {
+            0
+        } else {
+            1
+        };
+        let result = (self.acc as u16)
+            .wrapping_sub(operand as u16)
+            .wrapping_sub(carry) as u8;
+
+        if self.acc as u16 >= operand as u16 + carry as u16 {
+            self.flag_set(StatusFlag::Carry);
+        } else {
+            self.flag_clear(StatusFlag::Carry);
+        }
+
+        if (self.acc ^ operand) & (self.acc ^ result) & 0x80 != 0 {
+            self.flag_set(StatusFlag::Overflow)
+        } else {
+            self.flag_clear(StatusFlag::Overflow)
+        }
+
+        self.acc = result;
+        self.update_zero_and_negative_flags(self.acc);
+    }
 }
 
 enum Instruction {
@@ -724,6 +1032,7 @@ pub enum AddrMode {
     ZeroPage,
     ZeroPageX,
     ZeroPageY,
+    Relative,
     Absolute,
     AbsoluteX,
     AbsoluteY,
@@ -778,6 +1087,55 @@ mod test {
     }
 
     #[test]
+    fn test_get_address_immediate() {
+        let mut cpu = CPU::default();
+        cpu.pc = 100;
+        assert_eq!(cpu.get_address(AddrMode::Immediate), 100);
+        assert_eq!(cpu.pc, 101);
+    }
+
+    #[test]
+    fn test_get_address_zero_page() {
+        let mut cpu = CPU::default();
+        cpu.pc = 200;
+        cpu.mem[200] = 55;
+        assert_eq!(cpu.get_address(AddrMode::ZeroPage), 55);
+        assert_eq!(cpu.pc, 201);
+    }
+
+    #[test]
+    fn test_get_address_zero_page_x() {
+        let mut cpu = CPU::default();
+        cpu.pc = 300;
+        cpu.mem[300] = 55;
+        cpu.x = 5;
+        assert_eq!(cpu.get_address(AddrMode::ZeroPageX), 60);
+        assert_eq!(cpu.pc, 301);
+    }
+
+    #[test]
+    fn test_get_address_absolute() {
+        let mut cpu = CPU::default();
+        cpu.pc = 400;
+        cpu.mem[400] = 0x34; // lo
+        cpu.mem[401] = 0x12; // hi
+        assert_eq!(cpu.get_address(AddrMode::Absolute), 0x1234);
+        assert_eq!(cpu.pc, 402);
+    }
+
+    #[test]
+    fn test_get_address_indirect_y() {
+        let mut cpu = CPU::default();
+        cpu.pc = 500;
+        cpu.y = 3;
+        cpu.mem[500] = 210; // address to read from
+        cpu.mem[210] = 0x67; // lo
+        cpu.mem[211] = 0x89; // hi
+        assert_eq!(cpu.get_address(AddrMode::IndirectY), 0x896A); // 0x8967 + 3
+        assert_eq!(cpu.pc, 501);
+    }
+
+    #[test]
     fn test_adc() {
         let mut cpu = CPU::default();
         cpu.acc = 5;
@@ -802,7 +1160,7 @@ mod test {
     #[test]
     fn test_asl() {
         let mut cpu = CPU::default();
-        cpu.mem[0x0005] = 0b00001111;
+        cpu.mem[0x0005] = 0b10001111;
         cpu.asl(0x0005);
         assert_eq!(cpu.mem[0x0005], 0b00011110);
         assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
@@ -1221,5 +1579,161 @@ mod test {
         cpu.y = 0x00;
         cpu.iny();
         assert_eq!(cpu.y, 0x01);
+    }
+
+    #[test]
+    fn test_lsr_accumulator() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b1000_0010;
+        cpu.lsr_accumulator();
+        assert_eq!(cpu.acc, 0b0100_0001);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    // Similarly for test_lsr_zero_page and test_lsr_absolute
+
+    #[test]
+    fn test_nop() {
+        let mut cpu = CPU::default();
+        let initial_status = cpu.status;
+        cpu.nop();
+        assert_eq!(cpu.status, initial_status);
+    }
+
+    #[test]
+    fn test_ora_immediate() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b1000_0010;
+        cpu.ora(0b0110_0110);
+        assert_eq!(cpu.acc, 0b1110_0110);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), true);
+    }
+
+    // Similarly for test_ora_zero_page and test_ora_absolute
+
+    #[test]
+    fn test_rol_accumulator() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b1000_0010;
+        cpu.rol_accumulator();
+        assert_eq!(cpu.acc, 0b0000_0100);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    // Similarly for test_rol_zero_page and test_rol_absolute
+
+    #[test]
+    fn test_ror_accumulator() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0b1000_0010;
+        cpu.ror_accumulator();
+        assert_eq!(cpu.acc, 0b0100_0001);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Zero), false);
+        assert_eq!(cpu.flag_status(StatusFlag::Negative), false);
+    }
+
+    // Similarly for test_ror_zero_page and test_ror_absolute
+
+    #[test]
+    fn test_rti() {
+        let mut cpu = CPU::default();
+        cpu.pc = 0x2000;
+        cpu.stack_push(0x00);
+        cpu.stack_push(0x30);
+        cpu.rti();
+        assert_eq!(cpu.pc, 0x3000);
+        assert_eq!(cpu.flag_status(StatusFlag::InterruptDisable), false);
+    }
+
+    #[test]
+    fn test_rts() {
+        let mut cpu = CPU::default();
+
+        // Setup the initial state
+        cpu.stack_push(0xBE);
+        cpu.stack_push(0xEF);
+
+        // Call RTS
+        cpu.rts();
+
+        assert_eq!(
+            cpu.pc,
+            0xBEEF + 1,
+            "RTS should set the program counter to the return address plus one"
+        );
+
+        // Confirm that the stack pointer was updated
+        assert_eq!(cpu.sp, 0xFF, "RTS should increment the stack pointer twice");
+    }
+
+    #[test]
+    fn test_rts_at_end_of_memory() {
+        let mut cpu = CPU::default();
+
+        // Setup the initial state
+        cpu.stack_push(0xFF);
+        cpu.stack_push(0xFE);
+
+        // Call RTS
+        cpu.rts();
+
+        // Check that the program counter wraps around to the beginning of memory
+        assert_eq!(
+            cpu.pc, 0x0000,
+            "RTS at end of memory should wrap program counter to 0x0000"
+        );
+
+        // Confirm that the stack pointer was updated
+        assert_eq!(cpu.sp, 0xFF, "RTS should increment the stack pointer twice");
+    }
+
+    #[test]
+    fn test_sbc_no_borrow_no_overflow() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x10; // set accumulator to 0x10
+        cpu.flag_set(StatusFlag::Carry); // clear the carry flag (no borrow)
+        cpu.sbc(0x05); // execute SBC instruction
+        assert_eq!(cpu.acc, 0x0B); // 0x10 - 0x05 = 0x0B
+        assert!(cpu.flag_status(StatusFlag::Carry)); // no borrow, so Carry flag should be set
+        assert!(!cpu.flag_status(StatusFlag::Overflow)); // no overflow occurred
+    }
+
+    #[test]
+    fn test_sbc_borrow_no_overflow() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x10; // set accumulator to 0x10
+        cpu.flag_clear(StatusFlag::Carry); // set the carry flag (borrow)
+        cpu.sbc(0x05); // execute SBC instruction
+        assert_eq!(cpu.acc, 0x0A); // 0x10 - 0x05 - 1 (borrow) = 0x0A
+        assert!(cpu.flag_status(StatusFlag::Carry)); // no further borrow, so Carry flag should be set
+        assert!(!cpu.flag_status(StatusFlag::Overflow)); // no overflow occurred
+    }
+
+    #[test]
+    fn test_sbc_positive_overflow() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x7F; // set accumulator to 0x7F
+        cpu.flag_set(StatusFlag::Carry); // clear the carry flag (no borrow)
+        cpu.sbc(0xFF); // execute SBC instruction
+        assert_eq!(cpu.acc, 0x80); // 0x7F - (-1) = 0x80 (overflow to negative)
+        assert!(cpu.flag_status(StatusFlag::Carry)); // no borrow, so Carry flag should be set
+        assert!(cpu.flag_status(StatusFlag::Overflow)); // overflow occurred (positive to negative)
+    }
+
+    #[test]
+    fn test_sbc_negative_overflow() {
+        let mut cpu = CPU::default();
+        cpu.acc = 0x80; // set accumulator to 0x80
+        cpu.flag_set(StatusFlag::Carry); // clear the carry flag (no borrow)
+        cpu.sbc(0x01); // execute SBC instruction
+        assert_eq!(cpu.acc, 0x7F); // -128 - 1 = 127 (overflow to positive)
+        assert!(cpu.flag_status(StatusFlag::Carry)); // no borrow, so Carry flag should be set
+        assert!(cpu.flag_status(StatusFlag::Overflow)); // overflow occurred (negative to positive)
     }
 }
