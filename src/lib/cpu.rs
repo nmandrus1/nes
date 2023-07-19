@@ -1,3 +1,4 @@
+#[cfg(not(test))]
 use log::{debug, error, info, trace, warn};
 
 #[repr(u8)]
@@ -12,10 +13,10 @@ enum StatusFlag {
 
 pub struct CPU {
     /// program counter, 16 bits
-    pc: u16,
+    pub pc: u16,
 
     /// stack pointer, can only access 256 bytes from 0x0100-0x01FF
-    sp: u8,
+    pub sp: u8,
 
     /// the X and Y registers
     x: u8,
@@ -38,7 +39,7 @@ pub struct CPU {
     // +--------- Negative
     status: u8,
 
-    mem: [u8; 0xFFFF],
+    pub mem: [u8; 0xFFFF],
 }
 
 impl Default for CPU {
@@ -57,20 +58,6 @@ impl Default for CPU {
 }
 
 impl CPU {
-    /// Try to load memory into RAM
-    pub fn load_rom(&mut self, rom: &[u8]) -> anyhow::Result<()> {
-        if rom.len() > self.mem.len() {
-            anyhow::bail!("ROM doesn't fit into RAM");
-        }
-
-        // load the ROM into memory
-        for (i, byte) in rom.iter().enumerate() {
-            self.mem[i] = *byte;
-        }
-
-        Ok(())
-    }
-
     /// Read the opcode at the current program counter's location
     fn read_opcode(&mut self) -> u8 {
         self.read(self.pc)
@@ -124,13 +111,21 @@ impl CPU {
             }
 
             AddrMode::Indirect => {
-                let lo = self.read(self.pc) as u16;
-                let hi = self.read(self.pc + 1) as u16;
+                let addr_lo = self.read(self.pc) as u16;
+                let addr_hi = self.read(self.pc + 1) as u16;
                 self.pc += 2;
-                let indr_addr = hi << 8 | lo;
+
+                let indr_addr = addr_hi << 8 | addr_lo;
 
                 let lo = self.read(indr_addr) as u16;
-                let hi = self.read(indr_addr + 1) as u16;
+
+                let hi = if addr_lo == 0xFF {
+                    // page boundary bug
+                    self.read(indr_addr & 0xFF00) as u16
+                } else {
+                    self.read(indr_addr + 1) as u16
+                };
+
                 hi << 8 | lo
             }
 
@@ -721,8 +716,17 @@ impl CPU {
             // decode instruction
             let instr = self.decode(opcode);
 
+            debug!("Instruction: {:?}", instr);
+
+            if instr == Instruction::BRK {
+                break;
+            }
+
             // execute
-            self.execute(instr)
+            self.execute(instr);
+            debug!("pc: 0x{:X}", self.pc);
+            debug!("sp: 0x{:X}", self.sp);
+            debug!("status: 0b{:08b}", self.status);
         }
     }
 
@@ -734,9 +738,13 @@ impl CPU {
     ///     Negative
     ///     Zero
     fn adc(&mut self, operand: u8) {
+        debug!("operand: 0x{:X}", operand);
+        debug!("Carry: {}", self.flag_status(StatusFlag::Carry));
         // A + M + C
         let result =
             self.acc as u16 + operand as u16 + u16::from(self.flag_status(StatusFlag::Carry));
+
+        debug!("result: 0x{:X}", result);
 
         // store the lowest 8 bits of the result in A
         self.acc = result as u8;
@@ -758,6 +766,7 @@ impl CPU {
 
         // determine negative and zero flag status
         self.update_zero_and_negative_flags(self.acc);
+        debug!("A: 0x{:X}", self.acc);
     }
 
     /// perform a logical and bit by bit on the accumulator and the operand
@@ -1024,20 +1033,7 @@ impl CPU {
 
     /// Set the program counter equal to the address specified by the operand
     fn jmp(&mut self, address: u16) {
-        todo!()
-
-        // Bug-for-bug Indirect Addressing Code
-        //
-        // let lsb = self.read(operand);
-        // let msb: u8;
-        //
-        // if (operand & 0xFF == 0xFF) {
-        //     msb = self.read(operand & 0xFF00);
-        // } else {
-        //     msb = self.read(operand + 1);
-        // }
-        //
-        // self.pcounter = (((msb as u16) << 8) | lsb as u16) as usize;
+        self.pc = address;
     }
 
     /// Pushes return address onto stack and sets pcounter to passed address
@@ -1053,18 +1049,21 @@ impl CPU {
     fn lda(&mut self, operand: u8) {
         self.acc = operand;
         self.update_zero_and_negative_flags(self.acc);
+        debug!("A: 0x{:X}", self.acc);
     }
 
     /// Store a value in the X register
     fn ldx(&mut self, operand: u8) {
         self.x = operand;
         self.update_zero_and_negative_flags(self.x);
+        debug!("X: 0x{:X}", self.x);
     }
 
     /// Store a value in the Y register
     fn ldy(&mut self, operand: u8) {
         self.y = operand;
         self.update_zero_and_negative_flags(self.y);
+        debug!("Y: 0x{:X}", self.acc);
     }
 
     /// shift the bits of the operand right 1 and place the LSB in the Carry bit
@@ -1222,6 +1221,8 @@ impl CPU {
     }
 
     fn sbc(&mut self, operand: u8) {
+        debug!("operand: 0x{:X}", operand);
+        debug!("Carry: {}", self.flag_status(StatusFlag::Carry));
         let carry = if self.flag_status(StatusFlag::Carry) {
             0
         } else {
@@ -1231,6 +1232,8 @@ impl CPU {
         let result = (self.acc as u16)
             .wrapping_sub(operand as u16)
             .wrapping_sub(carry) as u8;
+
+        debug!("result: 0x{:X}", result);
 
         if self.acc as u16 >= operand as u16 + carry as u16 {
             self.flag_set(StatusFlag::Carry);
@@ -1246,6 +1249,7 @@ impl CPU {
 
         self.acc = result;
         self.update_zero_and_negative_flags(self.acc);
+        debug!("A: 0x{:04X}", self.acc);
     }
 
     /// Set carry flag
@@ -1270,6 +1274,7 @@ impl CPU {
 
     /// Stores the contents of the X register in memory
     fn stx(&mut self, address: u16) {
+        debug!("address: 0x{:04X}", address);
         self.write(address, self.x)
     }
 
@@ -1314,6 +1319,7 @@ impl CPU {
     }
 }
 
+#[derive(Eq, PartialEq, Debug)]
 enum Instruction {
     ADC(AddrMode),
     AND(AddrMode),
@@ -1373,6 +1379,7 @@ enum Instruction {
     TYA,
 }
 
+#[derive(Eq, PartialEq, Debug)]
 pub enum AddrMode {
     Accumulator,
     Immediate,
@@ -1389,6 +1396,7 @@ pub enum AddrMode {
 }
 
 #[cfg(test)]
+use std::{println as info, println as debug};
 mod test {
     use super::*;
 
@@ -2356,5 +2364,42 @@ mod test {
 
         // Assert that accumulator now contains the value 0x78
         assert_eq!(cpu.acc, 0x78);
+    }
+
+    // ########## TESTING READING AND RUNNING ROMS ###########
+
+    #[test]
+    fn test_increment_x() {
+        let mut cpu = CPU::default();
+        cpu.pc = 0x8000;
+        cpu.mem[0x8000..0x8002].copy_from_slice(&[0xE8, 0x00]);
+
+        cpu.run();
+
+        assert_eq!(cpu.x, 1); // X should have been incremented
+    }
+
+    #[test]
+    fn test_basic_addition() {
+        let mut cpu = CPU::default();
+        cpu.pc = 0x8000;
+        cpu.mem[0x8000..0x800B].copy_from_slice(&[
+            0xA9, 0x05, 0xA2, 0x03, 0x8E, 0x69, 0x69, 0x6D, 0x69, 0x69, 0x00,
+        ]);
+
+        cpu.run();
+
+        assert_eq!(cpu.acc, 0x08); // The result (0x05 + 0x03) should have been stored at memory address 0x10
+    }
+
+    #[test]
+    fn test_basic_subtraction() {
+        let mut cpu = CPU::default();
+        cpu.pc = 0x8000;
+        cpu.mem[0x8000..0x8008].copy_from_slice(&[0xA9, 0x05, 0x38, 0xE9, 0x03, 0x85, 0x10, 0x00]);
+
+        cpu.run();
+
+        assert_eq!(cpu.mem[0x10], 0x02); // The result (0x05 - 0x03) should have been stored at memory address 0x10
     }
 }
