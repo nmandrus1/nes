@@ -3,9 +3,20 @@ name = "nes"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "nes"
+path = "src/main.rs"
+
+[lib]
+name = "nes_lib"
+path = "src/lib/lib.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.71"
 env_logger = "0.10.0"
 log = "0.4.17"
+
+[dev-dependencies]
+env_logger = "0.10.0"
