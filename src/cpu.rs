@@ -123,6 +123,17 @@ impl CPU {
                 (hi << 8 | lo) + self.y as u16
             }
 
+            AddrMode::Indirect => {
+                let lo = self.read(self.pc) as u16;
+                let hi = self.read(self.pc + 1) as u16;
+                self.pc += 2;
+                let indr_addr = hi << 8 | lo;
+
+                let lo = self.read(indr_addr) as u16;
+                let hi = self.read(indr_addr + 1) as u16;
+                hi << 8 | lo
+            }
+
             AddrMode::IndirectX => {
                 let addr = self.read(self.pc).wrapping_add(self.x) as u16;
                 let lo = self.read(addr) as u16;
@@ -146,15 +157,268 @@ impl CPU {
     /// Decode the opcode to an Instruction
     fn decode(&mut self, opcode: u8) -> Instruction {
         match opcode {
-            // Add with Carry (ADC)   // Addressing Mode
-            0x69 => Instruction::ADC(AddrMode::Immediate), // Immediate
-            0x65 => Instruction::ADC(AddrMode::ZeroPage),  // Zero Page
-            0x75 => Instruction::ADC(AddrMode::ZeroPageX), // Zero Page, X
-            0x6D => Instruction::ADC(AddrMode::Absolute),  // Absolute
-            0x7D => Instruction::ADC(AddrMode::AbsoluteX), // Absolute, X
-            0x79 => Instruction::ADC(AddrMode::AbsoluteY), // Absolute, Y
-            0x61 => Instruction::ADC(AddrMode::IndirectX), // Indirect, X
-            0x71 => Instruction::ADC(AddrMode::IndirectY), // Indirect, Y
+            // ADC instructions
+            0x69 => Instruction::ADC(AddrMode::Immediate),
+            0x65 => Instruction::ADC(AddrMode::ZeroPage),
+            0x75 => Instruction::ADC(AddrMode::ZeroPageX),
+            0x6D => Instruction::ADC(AddrMode::Absolute),
+            0x7D => Instruction::ADC(AddrMode::AbsoluteX),
+            0x79 => Instruction::ADC(AddrMode::AbsoluteY),
+            0x61 => Instruction::ADC(AddrMode::IndirectX),
+            0x71 => Instruction::ADC(AddrMode::IndirectY),
+
+            // AND instructions
+            0x29 => Instruction::AND(AddrMode::Immediate),
+            0x25 => Instruction::AND(AddrMode::ZeroPage),
+            0x35 => Instruction::AND(AddrMode::ZeroPageX),
+            0x2D => Instruction::AND(AddrMode::Absolute),
+            0x3D => Instruction::AND(AddrMode::AbsoluteX),
+            0x39 => Instruction::AND(AddrMode::AbsoluteY),
+            0x21 => Instruction::AND(AddrMode::IndirectX),
+            0x31 => Instruction::AND(AddrMode::IndirectY),
+
+            // ASL instructions
+            0x0A => Instruction::ASL(AddrMode::Accumulator),
+            0x06 => Instruction::ASL(AddrMode::ZeroPage),
+            0x16 => Instruction::ASL(AddrMode::ZeroPageX),
+            0x0E => Instruction::ASL(AddrMode::Absolute),
+            0x1E => Instruction::ASL(AddrMode::AbsoluteX),
+
+            // BCC instruction
+            0x90 => Instruction::BCC,
+
+            // BCS instruction
+            0xB0 => Instruction::BCS,
+
+            // BEQ instruction
+            0xF0 => Instruction::BEQ,
+
+            // BIT instructions
+            0x24 => Instruction::BIT(AddrMode::ZeroPage),
+            0x2C => Instruction::BIT(AddrMode::Absolute),
+
+            // BMI instruction
+            0x30 => Instruction::BMI,
+
+            // BNE instruction
+            0xD0 => Instruction::BNE,
+
+            // BPL instruction
+            0x10 => Instruction::BPL,
+
+            // BRK instruction
+            0x00 => Instruction::BRK,
+
+            // BVC instruction
+            0x50 => Instruction::BVC,
+
+            // BVS instruction
+            0x70 => Instruction::BVS,
+
+            // CLC instruction
+            0x18 => Instruction::CLC,
+
+            // CLD instruction
+            0xD8 => Instruction::CLD,
+
+            // CLI instruction
+            0x58 => Instruction::CLI,
+
+            // CLV instruction
+            0xB8 => Instruction::CLV,
+
+            // CMP instructions
+            0xC9 => Instruction::CMP(AddrMode::Immediate),
+            0xC5 => Instruction::CMP(AddrMode::ZeroPage),
+            0xD5 => Instruction::CMP(AddrMode::ZeroPageX),
+            0xCD => Instruction::CMP(AddrMode::Absolute),
+            0xDD => Instruction::CMP(AddrMode::AbsoluteX),
+            0xD9 => Instruction::CMP(AddrMode::AbsoluteY),
+            0xC1 => Instruction::CMP(AddrMode::IndirectX),
+            0xD1 => Instruction::CMP(AddrMode::IndirectY),
+
+            // CPX instructions
+            0xE0 => Instruction::CPX(AddrMode::Immediate),
+            0xE4 => Instruction::CPX(AddrMode::ZeroPage),
+            0xEC => Instruction::CPX(AddrMode::Absolute),
+
+            // CPY instructions
+            0xC0 => Instruction::CPY(AddrMode::Immediate),
+            0xC4 => Instruction::CPY(AddrMode::ZeroPage),
+            0xCC => Instruction::CPY(AddrMode::Absolute),
+
+            // DEC instructions
+            0xC6 => Instruction::DEC(AddrMode::ZeroPage),
+            0xD6 => Instruction::DEC(AddrMode::ZeroPageX),
+            0xCE => Instruction::DEC(AddrMode::Absolute),
+            0xDE => Instruction::DEC(AddrMode::AbsoluteX),
+
+            // DEX instruction
+            0xCA => Instruction::DEX,
+
+            // DEY instruction
+            0x88 => Instruction::DEY,
+
+            // EOR instructions
+            0x49 => Instruction::EOR(AddrMode::Immediate),
+            0x45 => Instruction::EOR(AddrMode::ZeroPage),
+            0x55 => Instruction::EOR(AddrMode::ZeroPageX),
+            0x4D => Instruction::EOR(AddrMode::Absolute),
+            0x5D => Instruction::EOR(AddrMode::AbsoluteX),
+            0x59 => Instruction::EOR(AddrMode::AbsoluteY),
+            0x41 => Instruction::EOR(AddrMode::IndirectX),
+            0x51 => Instruction::EOR(AddrMode::IndirectY),
+
+            // INC instructions
+            0xE6 => Instruction::INC(AddrMode::ZeroPage),
+            0xF6 => Instruction::INC(AddrMode::ZeroPageX),
+            0xEE => Instruction::INC(AddrMode::Absolute),
+            0xFE => Instruction::INC(AddrMode::AbsoluteX),
+
+            // INX instruction
+            0xE8 => Instruction::INX,
+
+            // INY instruction
+            0xC8 => Instruction::INY,
+
+            // JMP instructions
+            0x4C => Instruction::JMP(AddrMode::Absolute),
+            0x6C => Instruction::JMP(AddrMode::Indirect),
+
+            // JSR instruction
+            0x20 => Instruction::JSR(AddrMode::Absolute),
+
+            // LDA instructions
+            0xA9 => Instruction::LDA(AddrMode::Immediate),
+            0xA5 => Instruction::LDA(AddrMode::ZeroPage),
+            0xB5 => Instruction::LDA(AddrMode::ZeroPageX),
+            0xAD => Instruction::LDA(AddrMode::Absolute),
+            0xBD => Instruction::LDA(AddrMode::AbsoluteX),
+            0xB9 => Instruction::LDA(AddrMode::AbsoluteY),
+            0xA1 => Instruction::LDA(AddrMode::IndirectX),
+            0xB1 => Instruction::LDA(AddrMode::IndirectY),
+
+            // LDX instructions
+            0xA2 => Instruction::LDX(AddrMode::Immediate),
+            0xA6 => Instruction::LDX(AddrMode::ZeroPage),
+            0xB6 => Instruction::LDX(AddrMode::ZeroPageY),
+            0xAE => Instruction::LDX(AddrMode::Absolute),
+            0xBE => Instruction::LDX(AddrMode::AbsoluteY),
+
+            // LDY instructions
+            0xA0 => Instruction::LDY(AddrMode::Immediate),
+            0xA4 => Instruction::LDY(AddrMode::ZeroPage),
+            0xB4 => Instruction::LDY(AddrMode::ZeroPageX),
+            0xAC => Instruction::LDY(AddrMode::Absolute),
+            0xBC => Instruction::LDY(AddrMode::AbsoluteX),
+
+            // LSR instructions
+            0x4A => Instruction::LSR(AddrMode::Accumulator),
+            0x46 => Instruction::LSR(AddrMode::ZeroPage),
+            0x56 => Instruction::LSR(AddrMode::ZeroPageX),
+            0x4E => Instruction::LSR(AddrMode::Absolute),
+            0x5E => Instruction::LSR(AddrMode::AbsoluteX),
+
+            // NOP instruction
+            0xEA => Instruction::NOP,
+
+            // ORA instructions
+            0x09 => Instruction::ORA(AddrMode::Immediate),
+            0x05 => Instruction::ORA(AddrMode::ZeroPage),
+            0x15 => Instruction::ORA(AddrMode::ZeroPageX),
+            0x0D => Instruction::ORA(AddrMode::Absolute),
+            0x1D => Instruction::ORA(AddrMode::AbsoluteX),
+            0x19 => Instruction::ORA(AddrMode::AbsoluteY),
+            0x01 => Instruction::ORA(AddrMode::IndirectX),
+            0x11 => Instruction::ORA(AddrMode::IndirectY),
+
+            // PHA instruction
+            0x48 => Instruction::PHA,
+
+            // PHP instruction
+            0x08 => Instruction::PHP,
+
+            // PLA instruction
+            0x68 => Instruction::PLA,
+
+            // PLP instruction
+            0x28 => Instruction::PLP,
+
+            // ROL instructions
+            0x2A => Instruction::ROL(AddrMode::Accumulator),
+            0x26 => Instruction::ROL(AddrMode::ZeroPage),
+            0x36 => Instruction::ROL(AddrMode::ZeroPageX),
+            0x2E => Instruction::ROL(AddrMode::Absolute),
+            0x3E => Instruction::ROL(AddrMode::AbsoluteX),
+
+            // ROR instructions
+            0x6A => Instruction::ROR(AddrMode::Accumulator),
+            0x66 => Instruction::ROR(AddrMode::ZeroPage),
+            0x76 => Instruction::ROR(AddrMode::ZeroPageX),
+            0x6E => Instruction::ROR(AddrMode::Absolute),
+            0x7E => Instruction::ROR(AddrMode::AbsoluteX),
+
+            // RTI instruction
+            0x40 => Instruction::RTI,
+
+            // RTS instruction
+            0x60 => Instruction::RTS,
+
+            // SBC instructions
+            0xE9 => Instruction::SBC(AddrMode::Immediate),
+            0xE5 => Instruction::SBC(AddrMode::ZeroPage),
+            0xF5 => Instruction::SBC(AddrMode::ZeroPageX),
+            0xED => Instruction::SBC(AddrMode::Absolute),
+            0xFD => Instruction::SBC(AddrMode::AbsoluteX),
+            0xF9 => Instruction::SBC(AddrMode::AbsoluteY),
+            0xE1 => Instruction::SBC(AddrMode::IndirectX),
+            0xF1 => Instruction::SBC(AddrMode::IndirectY),
+
+            // SEC instruction
+            0x38 => Instruction::SEC,
+
+            // SED instruction
+            0xF8 => Instruction::SED,
+
+            // SEI instruction
+            0x78 => Instruction::SEI,
+
+            // STA instructions
+            0x85 => Instruction::STA(AddrMode::ZeroPage),
+            0x95 => Instruction::STA(AddrMode::ZeroPageX),
+            0x8D => Instruction::STA(AddrMode::Absolute),
+            0x9D => Instruction::STA(AddrMode::AbsoluteX),
+            0x99 => Instruction::STA(AddrMode::AbsoluteY),
+            0x81 => Instruction::STA(AddrMode::IndirectX),
+            0x91 => Instruction::STA(AddrMode::IndirectY),
+
+            // STX instructions
+            0x86 => Instruction::STX(AddrMode::ZeroPage),
+            0x96 => Instruction::STX(AddrMode::ZeroPageY),
+            0x8E => Instruction::STX(AddrMode::Absolute),
+
+            // STY instructions
+            0x84 => Instruction::STY(AddrMode::ZeroPage),
+            0x94 => Instruction::STY(AddrMode::ZeroPageX),
+            0x8C => Instruction::STY(AddrMode::Absolute),
+
+            // TAX instruction
+            0xAA => Instruction::TAX,
+
+            // TAY instruction
+            0xA8 => Instruction::TAY,
+
+            // TSX instruction
+            0xBA => Instruction::TSX,
+
+            // TXA instruction
+            0x8A => Instruction::TXA,
+
+            // TXS instruction
+            0x9A => Instruction::TXS,
+
+            // TYA instruction
+            0x98 => Instruction::TYA,
 
             _ => panic!("Fatal Error: Instruction not implemented"),
         }
@@ -203,12 +467,13 @@ impl CPU {
 
     /// Pushes a byte onto the stack
     fn stack_push(&mut self, value: u8) {
-        let stack_addr = 0x0100 + self.sp as u16;
-        self.write(stack_addr, value);
         match self.sp.checked_sub(1) {
             Some(s) => self.sp = s,
             None => panic!("Fatal Error: Stack Overflow"),
-        }
+        };
+
+        let stack_addr = 0x0100 + self.sp as u16;
+        self.write(stack_addr, value);
     }
 
     /// Pops a byte off the stack
@@ -420,18 +685,27 @@ impl CPU {
                 self.sbc(operand);
             }
 
-            Instruction::SEC => {}
-            Instruction::SED => {}
-            Instruction::SEI => {}
-            Instruction::STA(mode) => {}
-            Instruction::STX(mode) => {}
-            Instruction::STY(mode) => {}
-            Instruction::TAX => {}
-            Instruction::TAY => {}
-            Instruction::TSX => {}
-            Instruction::TXA => {}
-            Instruction::TXS => {}
-            Instruction::TYA => {}
+            Instruction::SEC => self.sec(),
+            Instruction::SED => self.sed(),
+            Instruction::SEI => self.sei(),
+            Instruction::STA(mode) => {
+                let address = self.get_address(mode);
+                self.sta(address);
+            }
+            Instruction::STX(mode) => {
+                let address = self.get_address(mode);
+                self.stx(address);
+            }
+            Instruction::STY(mode) => {
+                let address = self.get_address(mode);
+                self.sty(address);
+            }
+            Instruction::TAX => self.tax(),
+            Instruction::TAY => self.tay(),
+            Instruction::TSX => self.tsx(),
+            Instruction::TXA => self.txa(),
+            Instruction::TXS => self.txs(),
+            Instruction::TYA => self.tya(),
         }
     }
 
@@ -448,6 +722,7 @@ impl CPU {
             let instr = self.decode(opcode);
 
             // execute
+            self.execute(instr)
         }
     }
 
@@ -928,8 +1203,8 @@ impl CPU {
     // pull the processor status and program counter from the stack
     fn rti(&mut self) {
         self.status = self.stack_pop();
-        let hi = self.stack_pop() as u16;
         let lo = self.stack_pop() as u16;
+        let hi = self.stack_pop() as u16;
         self.pc = hi << 8 | lo;
     }
 
@@ -937,7 +1212,13 @@ impl CPU {
     fn rts(&mut self) {
         let lo = self.stack_pop() as u16;
         let hi = self.stack_pop() as u16;
-        self.pc = (hi << 8 | lo) + 1;
+
+        println!("hi: {:x}\nlo: {:x}", hi, lo);
+
+        self.pc = match (hi << 8 | lo).checked_add(1) {
+            Some(s) => s,
+            None => 0,
+        };
     }
 
     fn sbc(&mut self, operand: u8) {
@@ -946,6 +1227,7 @@ impl CPU {
         } else {
             1
         };
+
         let result = (self.acc as u16)
             .wrapping_sub(operand as u16)
             .wrapping_sub(carry) as u8;
@@ -963,6 +1245,71 @@ impl CPU {
         }
 
         self.acc = result;
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    /// Set carry flag
+    fn sec(&mut self) {
+        self.flag_set(StatusFlag::Carry)
+    }
+
+    /// Set decimal flag
+    fn sed(&mut self) {
+        self.flag_set(StatusFlag::Decimal)
+    }
+
+    /// Set interrupt flag
+    fn sei(&mut self) {
+        self.flag_set(StatusFlag::InterruptDisable)
+    }
+
+    /// Stores the contents of the accumulator in memory
+    fn sta(&mut self, address: u16) {
+        self.write(address, self.acc)
+    }
+
+    /// Stores the contents of the X register in memory
+    fn stx(&mut self, address: u16) {
+        self.write(address, self.x)
+    }
+
+    /// Stores the contents of the Y register in memory
+    fn sty(&mut self, address: u16) {
+        self.write(address, self.y)
+    }
+
+    /// Store the contents of the accumulator into the X register
+    fn tax(&mut self) {
+        self.x = self.acc;
+        self.update_zero_and_negative_flags(self.x);
+    }
+
+    /// Store the contents of the accumulator into the Y register
+    fn tay(&mut self) {
+        self.y = self.acc;
+        self.update_zero_and_negative_flags(self.y);
+    }
+
+    /// Copies the contents of the stack pointer into the X register
+    fn tsx(&mut self) {
+        self.x = self.sp;
+        self.update_zero_and_negative_flags(self.x);
+    }
+
+    /// Copies the contents of the X register into the accumulator
+    fn txa(&mut self) {
+        self.acc = self.x;
+        self.update_zero_and_negative_flags(self.acc);
+    }
+
+    /// Copies the contents of the X register into the stack pointer
+    fn txs(&mut self) {
+        self.sp = self.x;
+    }
+
+    /// Copies the contents of the Y register into the accumulator
+    fn tya(&mut self) {
+        self.acc = self.y;
         self.update_zero_and_negative_flags(self.acc);
     }
 }
@@ -1036,6 +1383,7 @@ pub enum AddrMode {
     Absolute,
     AbsoluteX,
     AbsoluteY,
+    Indirect,
     IndirectX,
     IndirectY,
 }
@@ -1133,6 +1481,54 @@ mod test {
         cpu.mem[211] = 0x89; // hi
         assert_eq!(cpu.get_address(AddrMode::IndirectY), 0x896A); // 0x8967 + 3
         assert_eq!(cpu.pc, 501);
+    }
+
+    #[test]
+    fn test_push_pop_stack() {
+        let mut cpu = CPU::default();
+
+        // push some values to stack
+        cpu.stack_push(0x12);
+        cpu.stack_push(0x34);
+        cpu.stack_push(0x56);
+        cpu.stack_push(0x78);
+
+        // pop values from stack, should be in reverse order
+        assert_eq!(cpu.stack_pop(), 0x78);
+        assert_eq!(cpu.stack_pop(), 0x56);
+        assert_eq!(cpu.stack_pop(), 0x34);
+        assert_eq!(cpu.stack_pop(), 0x12);
+    }
+
+    #[test]
+    #[should_panic(expected = "Fatal Error: Stack Overflow")]
+    fn test_push_pop_stack_overflow() {
+        let mut cpu = CPU::default();
+
+        // push 256 values to stack
+        for _ in 0..256 {
+            cpu.stack_push(0x12);
+        }
+
+        // after 256 pushes, we expect a panic on the next push
+        cpu.stack_push(0x12);
+    }
+
+    #[test]
+    #[should_panic(expected = "Fatal Error: Stack Underflow")]
+    fn test_push_pop_stack_underflow() {
+        let mut cpu = CPU::default();
+
+        // push a value to stack
+        cpu.stack_push(0x12);
+
+        // pop the value from stack
+        assert_eq!(cpu.stack_pop(), 0x12);
+
+        // after popping all values, we expect a panic on the next pop
+        cpu.stack_pop();
+        cpu.stack_pop();
+        cpu.stack_pop();
     }
 
     #[test]
@@ -1643,21 +2039,30 @@ mod test {
     #[test]
     fn test_rti() {
         let mut cpu = CPU::default();
-        cpu.pc = 0x2000;
+
+        // pc on the stack
+        cpu.stack_push(0x20);
         cpu.stack_push(0x00);
-        cpu.stack_push(0x30);
+
+        // cpu status
+        cpu.stack_push(0x69);
+
         cpu.rti();
-        assert_eq!(cpu.pc, 0x3000);
-        assert_eq!(cpu.flag_status(StatusFlag::InterruptDisable), false);
+
+        assert_eq!(cpu.status, 0x69);
+        assert_eq!(cpu.pc, 0x2000);
     }
 
     #[test]
     fn test_rts() {
         let mut cpu = CPU::default();
+        println!("sp: {}", cpu.sp);
 
         // Setup the initial state
         cpu.stack_push(0xBE);
         cpu.stack_push(0xEF);
+
+        println!("sp: {}", cpu.sp);
 
         // Call RTS
         cpu.rts();
@@ -1669,7 +2074,7 @@ mod test {
         );
 
         // Confirm that the stack pointer was updated
-        assert_eq!(cpu.sp, 0xFF, "RTS should increment the stack pointer twice");
+        assert_eq!(cpu.sp, 0xFD, "RTS should increment the stack pointer twice");
     }
 
     #[test]
@@ -1678,7 +2083,7 @@ mod test {
 
         // Setup the initial state
         cpu.stack_push(0xFF);
-        cpu.stack_push(0xFE);
+        cpu.stack_push(0xFF);
 
         // Call RTS
         cpu.rts();
@@ -1690,7 +2095,7 @@ mod test {
         );
 
         // Confirm that the stack pointer was updated
-        assert_eq!(cpu.sp, 0xFF, "RTS should increment the stack pointer twice");
+        assert_eq!(cpu.sp, 0xFD, "RTS should increment the stack pointer twice");
     }
 
     #[test]
@@ -1719,10 +2124,10 @@ mod test {
     fn test_sbc_positive_overflow() {
         let mut cpu = CPU::default();
         cpu.acc = 0x7F; // set accumulator to 0x7F
-        cpu.flag_set(StatusFlag::Carry); // clear the carry flag (no borrow)
+        cpu.flag_set(StatusFlag::Carry);
         cpu.sbc(0xFF); // execute SBC instruction
         assert_eq!(cpu.acc, 0x80); // 0x7F - (-1) = 0x80 (overflow to negative)
-        assert!(cpu.flag_status(StatusFlag::Carry)); // no borrow, so Carry flag should be set
+        assert!(!cpu.flag_status(StatusFlag::Carry)); // borrow, so Carry flag should be clear
         assert!(cpu.flag_status(StatusFlag::Overflow)); // overflow occurred (positive to negative)
     }
 
@@ -1735,5 +2140,221 @@ mod test {
         assert_eq!(cpu.acc, 0x7F); // -128 - 1 = 127 (overflow to positive)
         assert!(cpu.flag_status(StatusFlag::Carry)); // no borrow, so Carry flag should be set
         assert!(cpu.flag_status(StatusFlag::Overflow)); // overflow occurred (negative to positive)
+    }
+
+    #[test]
+    fn test_sec() {
+        let mut cpu = CPU::default();
+
+        // Clear the carry flag
+        cpu.flag_clear(StatusFlag::Carry);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), false);
+
+        // Execute SEC instruction
+        cpu.sec();
+
+        // Assert that the carry flag is now set
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+    }
+
+    #[test]
+    fn test_sec_already_set() {
+        let mut cpu = CPU::default();
+
+        // Set the carry flag
+        cpu.flag_set(StatusFlag::Carry);
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+
+        // Execute SEC instruction (should be idempotent)
+        cpu.sec();
+
+        // Assert that the carry flag is still set
+        assert_eq!(cpu.flag_status(StatusFlag::Carry), true);
+    }
+
+    #[test]
+    fn test_sed() {
+        let mut cpu = CPU::default();
+
+        // Clear the decimal flag
+        cpu.flag_clear(StatusFlag::Decimal);
+        assert_eq!(cpu.flag_status(StatusFlag::Decimal), false);
+
+        // Execute SED instruction
+        cpu.sed();
+
+        // Assert that the decimal flag is now set
+        assert_eq!(cpu.flag_status(StatusFlag::Decimal), true);
+    }
+
+    #[test]
+    fn test_sed_already_set() {
+        let mut cpu = CPU::default();
+
+        // Set the decimal flag
+        cpu.flag_set(StatusFlag::Decimal);
+        assert_eq!(cpu.flag_status(StatusFlag::Decimal), true);
+
+        // Execute SED instruction (should be idempotent)
+        cpu.sed();
+
+        // Assert that the decimal flag is still set
+        assert_eq!(cpu.flag_status(StatusFlag::Decimal), true);
+    }
+
+    #[test]
+    fn test_sei() {
+        let mut cpu = CPU::default();
+
+        // Clear the interrupt flag
+        cpu.status &= !(1 << StatusFlag::InterruptDisable as u8);
+        assert_eq!(cpu.flag_status(StatusFlag::InterruptDisable), false);
+
+        // Execute SEI instruction
+        cpu.sei();
+
+        // Assert that the interrupt flag is now set
+        assert_eq!(cpu.flag_status(StatusFlag::InterruptDisable), true);
+    }
+
+    #[test]
+    fn test_sei_already_set() {
+        let mut cpu = CPU::default();
+
+        // Set the interrupt flag
+        cpu.status |= 1 << StatusFlag::InterruptDisable as u8;
+        assert_eq!(cpu.flag_status(StatusFlag::InterruptDisable), true);
+
+        // Execute SEI instruction (should be idempotent)
+        cpu.sei();
+
+        // Assert that the interrupt flag is still set
+        assert_eq!(cpu.flag_status(StatusFlag::InterruptDisable), true);
+    }
+
+    #[test]
+    fn test_sta() {
+        let mut cpu = CPU::default();
+
+        // Set accumulator to a known value
+        cpu.acc = 0x42;
+
+        // Execute STA instruction to store the accumulator's value at memory address 0x200
+        cpu.sta(0x200);
+
+        // Assert that the memory at 0x200 now contains the value 0x42
+        assert_eq!(cpu.read(0x200), 0x42);
+    }
+
+    #[test]
+    fn test_stx() {
+        let mut cpu = CPU::default();
+
+        // Set X register to a known value
+        cpu.x = 0x24;
+
+        // Execute STX instruction to store the X register's value at memory address 0x300
+        cpu.stx(0x300);
+
+        // Assert that the memory at 0x300 now contains the value 0x24
+        assert_eq!(cpu.read(0x300), 0x24);
+    }
+
+    #[test]
+    fn test_sty() {
+        let mut cpu = CPU::default();
+
+        // Set Y register to a known value
+        cpu.y = 0x12;
+
+        // Execute STY instruction to store the Y register's value at memory address 0x400
+        cpu.sty(0x400);
+
+        // Assert that the memory at 0x400 now contains the value 0x12
+        assert_eq!(cpu.read(0x400), 0x12);
+    }
+
+    #[test]
+    fn test_tax() {
+        let mut cpu = CPU::default();
+
+        // Set accumulator to a known value
+        cpu.acc = 0x42;
+
+        // Execute TAX instruction to transfer accumulator's value to X register
+        cpu.tax();
+
+        // Assert that X register now contains the value 0x42
+        assert_eq!(cpu.x, 0x42);
+    }
+
+    #[test]
+    fn test_tay() {
+        let mut cpu = CPU::default();
+
+        // Set accumulator to a known value
+        cpu.acc = 0x24;
+
+        // Execute TAY instruction to transfer accumulator's value to Y register
+        cpu.tay();
+
+        // Assert that Y register now contains the value 0x24
+        assert_eq!(cpu.y, 0x24);
+    }
+
+    #[test]
+    fn test_tsx() {
+        let mut cpu = CPU::default();
+
+        // Set stack pointer to a known value
+        cpu.sp = 0x12;
+
+        // Execute TSX instruction to transfer stack pointer's value to X register
+        cpu.tsx();
+
+        // Assert that X register now contains the value 0x12
+        assert_eq!(cpu.x, 0x12);
+    }
+
+    #[test]
+    fn test_txa() {
+        let mut cpu = CPU::default();
+
+        // Set X register to a known value
+        cpu.x = 0x34;
+
+        // Execute TXA instruction to transfer X register's value to accumulator
+        cpu.txa();
+
+        // Assert that accumulator now contains the value 0x34
+        assert_eq!(cpu.acc, 0x34);
+    }
+
+    #[test]
+    fn test_txs() {
+        let mut cpu = CPU::default();
+
+        // Set X register to a known value
+        cpu.x = 0x56;
+
+        // Execute TXS instruction to transfer X register's value to stack pointer
+        cpu.txs();
+
+        // Assert that stack pointer now contains the value 0x56
+        assert_eq!(cpu.sp, 0x56);
+    }
+
+    #[test]
+    fn test_tya() {
+        let mut cpu = CPU::default();
+
+        // Set Y register to a known value
+        cpu.y = 0x78;
+
+        // Execute TYA instruction to transfer Y register's value to accumulator
+        cpu.tya();
+
+        // Assert that accumulator now contains the value 0x78
+        assert_eq!(cpu.acc, 0x78);
     }
 }
